@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Illness Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -40,7 +40,7 @@
 
   <!-- Notification Sound -->
   <audio id="reminder-sound">
-    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg" />
   </audio>
 
   <!-- Firebase SDK -->
@@ -198,7 +198,7 @@
       remove(ref(db, 'records/' + id));
     };
 
-    // Reminder Checker
+    // Reminder Checker every 60 seconds
     setInterval(() => {
       if (!window._allRecords) return;
       const now = new Date();
@@ -211,7 +211,7 @@
           alert(`Reminder: ${rec.patient} - ${rec.symptom} (${rec.category})`);
         }
       });
-    }, 60000); // check every 60 seconds
+    }, 60000);
   </script>
 </body>
 </html>
