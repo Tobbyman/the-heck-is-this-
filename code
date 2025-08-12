@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Illness Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+    <h1 class="text-2xl font-bold mb-4">Illness Symptom Tracker</h1>
+    
+    <!-- Form -->
+    <form id="symptom-form" class="space-y-4">
+      <input id="patient" type="text" placeholder="Patient Name" class="w-full border p-2 rounded" required />
+      <textarea id="symptom" placeholder="Symptom description" class="w-full border p-2 rounded" required></textarea>
+      <select id="category" class="w-full border p-2 rounded"></select>
+      <input id="medication-date" type="date" class="w-full border p-2 rounded" required />
+      <input id="medication-time" type="time" class="w-full border p-2 rounded" required />
+      <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Add Record</button>
+    </form>
+
+    <!-- Config page -->
+    <h2 class="text-xl font-semibold mt-6 mb-2">Configure Categories</h2>
+    <form id="config-form" class="flex space-x-2">
+      <input id="new-category" type="text" placeholder="New Category" class="flex-grow border p-2 rounded" />
+      <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded">Add</button>
+    </form>
+
+    <!-- Filters -->
+    <div class="flex space-x-2 mt-6">
+      <select id="filter-month" class="border p-2 rounded"></select>
+      <select id="filter-year" class="border p-2 rounded"></select>
+    </div>
+
+    <!-- Records -->
+    <h2 class="text-xl font-semibold mt-6 mb-2">Records</h2>
+    <div id="records" class="space-y-2"></div>
+  </div>
+
+  <!-- Notification Sound -->
+  <audio id="reminder-sound">
+    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+  </audio>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue, remove, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjPU0MxxmtQl39w-iMkDMvpRV1Zahqauk",
+      authDomain: "medical-check-55dcd.firebaseapp.com",
+      databaseURL: "https://medical-check-55dcd-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "medical-check-55dcd",
+      storageBucket: "medical-check-55dcd.firebasestorage.app",
+      messagingSenderId: "186917382644",
+      appId: "1:186917382644:web:91cff52a9037c88ad631a1",
+      measurementId: "G-944BSVWCW7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const $ = id => document.querySelector(id);
+
+    let categories = ['Mild Symptoms', 'Severe Symptoms'];
+    renderCategoryOptions();
+
+    function populateMonthYearFilters() {
+      const monthSelect = $('#filter-month');
+      const yearSelect = $('#filter-year');
+      monthSelect.innerHTML = `<option value="-1">All Months</option>`;
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      months.forEach((m, i) => {
+        monthSelect.innerHTML += `<option value="${i}">${m}</option>`;
+      });
+      yearSelect.innerHTML = `<option value="">All Years</option>`;
+      const currentYear = new Date().getFullYear();
+      for (let y = currentYear; y >= currentYear - 5; y--) {
+        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+      }
+    }
+    populateMonthYearFilters();
+    $('#filter-month').value = -1;
+    $('#filter-year').value = '';
+
+    function renderCategoryOptions() {
+      const catSelect = $('#category');
+      catSelect.innerHTML = '';
+      categories.forEach(cat => {
+        catSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+      });
+    }
+
+    const catRef = ref(db, 'categories');
+    onValue(catRef, snapshot => {
+      const data = snapshot.val();
+      if (data) categories = Object.values(data);
+      renderCategoryOptions();
+    });
+
+    $('#config-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const newCat = $('#new-category').value.trim();
+      if (newCat && !categories.includes(newCat)) {
+        categories.push(newCat);
+        set(catRef, categories);
+        $('#new-category').value = '';
+      }
+    });
+
+    $('#symptom-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const patient = $('#patient').value.trim();
+      const symptom = $('#symptom').value.trim();
+      const category = $('#category').value;
+      const medDate = $('#medication-date').value;
+      const medTime = $('#medication-time').value;
+      if (patient && symptom && medDate && medTime) {
+        push(ref(db, 'records'), {
+          patient, symptom, category,
+          medicationDate: medDate,
+          medicationTime: medTime,
+          timestamp: Date.now()
+        });
+        e.target.reset();
+        renderCategoryOptions();
+      }
+    });
+
+    function renderRecords(records) {
+      window._recordsCache = records;
+      const monthFilter = parseInt($('#filter-month').value);
+      const yearFilter = $('#filter-year').value;
+      const recordsDiv = $('#records');
+      recordsDiv.innerHTML = '';
+
+      const filtered = Object.entries(records || {}).filter(([id, rec]) => {
+        const date = new Date(rec.timestamp);
+        const m = date.getMonth();
+        const y = date.getFullYear();
+        if (monthFilter !== -1 && m !== monthFilter) return false;
+        if (yearFilter && y.toString() !== yearFilter) return false;
+        return true;
+      });
+
+      if (!filtered.length) {
+        recordsDiv.innerHTML = `<p class="text-gray-500">No records found</p>`;
+        return;
+      }
+
+      filtered.forEach(([id, rec]) => {
+        const card = document.createElement('div');
+        card.className = "border p-3 rounded flex justify-between items-center";
+        card.innerHTML = `
+          <div>
+            <p><strong>${rec.patient}</strong> - ${rec.category}</p>
+            <p>${rec.symptom}</p>
+            <p>Medication: ${rec.medicationDate} ${rec.medicationTime}</p>
+          </div>
+          <div class="space-x-2">
+            <button class="bg-yellow-400 px-2 py-1 rounded" onclick="editRecord('${id}')">Edit</button>
+            <button class="bg-red-500 text-white px-2 py-1 rounded" onclick="deleteRecord('${id}')">Delete</button>
+          </div>
+        `;
+        recordsDiv.appendChild(card);
+      });
+    }
+
+    function refreshRecordsView() {
+      if (window._recordsCache) renderRecords(window._recordsCache);
+    }
+
+    $('#filter-month').addEventListener('change', refreshRecordsView);
+    $('#filter-year').addEventListener('change', refreshRecordsView);
+
+    const recRef = ref(db, 'records');
+    onValue(recRef, snapshot => {
+      const data = snapshot.val();
+      renderRecords(data);
+      window._allRecords = data;
+    });
+
+    window.editRecord = id => {
+      const rec = window._recordsCache[id];
+      if (!rec) return;
+      $('#patient').value = rec.patient;
+      $('#symptom').value = rec.symptom;
+      $('#category').value = rec.category;
+      $('#medication-date').value = rec.medicationDate;
+      $('#medication-time').value = rec.medicationTime;
+      remove(ref(db, 'records/' + id));
+    };
+
+    window.deleteRecord = id => {
+      remove(ref(db, 'records/' + id));
+    };
+
+    // Reminder Checker
+    setInterval(() => {
+      if (!window._allRecords) return;
+      const now = new Date();
+      const currentDate = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().slice(0,5);
+
+      Object.entries(window._allRecords).forEach(([id, rec]) => {
+        if (rec.medicationDate === currentDate && rec.medicationTime === currentTime) {
+          document.getElementById('reminder-sound').play();
+          alert(`Reminder: ${rec.patient} - ${rec.symptom} (${rec.category})`);
+        }
+      });
+    }, 60000); // check every 60 seconds
+  </script>
+</body>
+</html>
